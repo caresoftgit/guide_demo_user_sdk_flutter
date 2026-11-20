@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:caresoft_customer_voice/caresoft_customer_voice.dart';
@@ -6,7 +7,51 @@ import 'package:customer_voice_demo/home_model.dart';
 
 import 'support.dart';
 
+class RejectedLoginTransport extends DemoTransport {
+  @override
+  Future<Object?> execute(String method, Map<String, Object?> args) async {
+    if (method == 'login') {
+      throw PlatformException(
+        code: 'APP_NOT_FOUND',
+        message: 'private response must stay hidden',
+      );
+    }
+    return super.execute(method, args);
+  }
+}
+
 void main() {
+  testWidgets(
+    'login failure shows safe code without private transport message',
+    (tester) async {
+      final t = RejectedLoginTransport();
+      await tester.pumpWidget(
+        VoiceDemoApp(
+          config: DemoConfig({
+            'backendUrl': 'https://voice.example.com',
+            'accountId': '42',
+            'appId': 'example-app',
+            'businessNumber': '18001234',
+          }),
+          voice: CustomerVoiceClient(t),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Đăng nhập'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('login-user')), '42');
+      await tester.enterText(
+        find.byKey(const Key('login-token')),
+        'ephemeral-example',
+      );
+      await tester.tap(find.widgetWithText(TextButton, 'Đăng nhập').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('APP_NOT_FOUND'), findsOneWidget);
+      expect(find.textContaining('private response'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await t.changes.close();
+    },
+  );
   testWidgets('empty public configuration shows setup and no dialer', (
     tester,
   ) async {

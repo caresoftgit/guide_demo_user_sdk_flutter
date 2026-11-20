@@ -117,7 +117,7 @@ override func application(_ application: UIApplication,
 
 Khi root UIViewController sẵn sàng, gọi `VoiceBootstrap.attach(to: rootController)`. Khi scene/app active, gọi `VoiceBootstrap.resume()`. Demo triển khai ở SceneDelegate; app không dùng scenes đặt cùng bước vào lifecycle tương ứng. Đừng dùng Dart build() làm nơi khởi tạo CallKit/push.
 
-Bật **Push Notifications** và **Background Modes → Audio, Voice over IP, Remote notifications**. Khai báo NSMicrophoneUsageDescription; giữ NSCameraUsageDescription như mẫu vì thư viện media tham chiếu API camera dù bản gọi thoại không truy cập camera. Không tự xin quyền camera. Cấu hình aps-environment và signing khớp môi trường server; xem demo Info.plist/entitlements, dùng Team/Bundle ID riêng.
+Bật **Push Notifications** và **Background Modes → Audio, Voice over IP, Remote notifications**. Khai báo NSMicrophoneUsageDescription; giữ NSCameraUsageDescription như mẫu vì thư viện media tham chiếu API camera dù bản gọi thoại không truy cập camera. Không tự xin quyền camera. Cấu hình aps-environment và signing khớp môi trường server; xem demo Info.plist/entitlements, dùng Team/Bundle ID riêng. Simulator kiểm thử đăng nhập cũng cần signing/app identity đúng để ghi Keychain; `--no-codesign` chỉ dùng kiểm tra build, không thay bản chạy nghiệm thu.
 
 ## 6. Initialize và quan sát state Dart
 

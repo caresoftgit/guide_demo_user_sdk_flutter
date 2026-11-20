@@ -96,7 +96,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
           'Cấu hình native chưa sẵn sàng. Hãy kiểm tra cấu hình và build lại.',
         'LOGOUT_REVOKE_UNCONFIRMED' =>
           'Đã đăng xuất trên máy. Server chưa xác nhận thu hồi phiên.',
-        _ => 'Không thực hiện được. Kiểm tra kết nối và thử lại.',
+        _ => 'Không thực hiện được ($code). Kiểm tra kết nối và thử lại.',
       },
     );
   }

@@ -53,13 +53,13 @@ File ở `build/app/outputs/flutter-apk/app-release.apk`. Release bật R8/resou
 
 1. Cài Xcode 26.4 và CocoaPods; kiểm tra `flutter doctor`.
 2. Chạy `flutter pub get`, `cd ios && pod install`, mở Runner.xcworkspace.
-3. Chọn scheme Runner và simulator rồi Run; hoặc `flutter run -d <SIMULATOR_ID>`.
+3. Chọn scheme Runner, cấu hình Signing Team/Bundle ID của ứng dụng và simulator rồi Run; hoặc `flutter run -d <SIMULATOR_ID>`. Simulator vẫn cần app identity entitlement để dùng Keychain; không dùng bản build `--no-codesign` để nghiệm thu đăng nhập.
 4. Với iPhone: chọn Team và Bundle ID riêng, khớp App Caresoft; bật Push Notifications và Background Modes Audio/VoIP/Remote notifications.
 5. Khi ký development: `pushEnvironment=sandbox`, configure lại, đặt Xcode `VOICE_APNS_ENVIRONMENT=development`; server phải có APNs sandbox tương ứng. TestFlight dùng production trong config và entitlement, profile distribution.
 6. Đổi AppIcon/logo và tên hiển thị theo ứng dụng. Bộ mẫu không có Team/profile/Bundle test nội bộ. Giữ microphone/camera purpose strings cần thiết trong Info.plist.
 
 ```sh
-flutter build ios --simulator --debug --no-codesign
+flutter build ios --simulator --debug
 flutter build ios --release --no-codesign
 ```
 
@@ -80,6 +80,7 @@ Lệnh thứ hai kiểm tra build device unsigned; chưa tạo bản distributio
 - Thiếu package path: chạy install_sdk.py trước pub get.
 - Checksum sai: lấy lại đúng archive và SHA256SUMS cùng bản; không bỏ qua xác minh.
 - NATIVE_MODULE_NOT_LINKED: cài Pods/autolinking, build native lại; hot reload chưa đủ.
+- SESSION_STORAGE_UNAVAILABLE: kiểm tra Signing Team, Bundle ID và entitlement app identity/Keychain; build lại Simulator với signing bật. Không xóa phiên hoặc thay bằng lưu token trong preferences.
 - NATIVE_BOOTSTRAP_REQUIRED/CONFIGURATION_MISMATCH: kiểm tra Application/AppDelegate, configure và build lại.
 - Push chưa tới: kiểm tra package/Bundle, environment, Firebase/APNs credentials **server** và quyền OS.
 - Request gọi timeout: chờ synchronize thành công trước khi gọi tiếp; không gọi lại tự động.

@@ -5,10 +5,11 @@ Kiểm chứng ngày 20/11/2026. Flutter 3.50.1 / Dart 3.14.0, JDK 17, Xcode 26.
 | Hạng mục | Kết quả |
 |---|---|
 | SDK Dart | 10 tests đạt: forwarding, lỗi an toàn, snapshot/revision, detach/reattach, không replay, quyền thông báo |
-| Demo Dart/widget | 10 tests đạt: readiness/Home, call hiện tại, create mơ hồ, đồng bộ, form token |
+| Demo Dart/widget | 11 tests đạt: readiness/Home, call hiện tại, create mơ hồ, đồng bộ, form token và lỗi đăng nhập chỉ hiển thị mã an toàn |
 | Android Kotlin | 9 tests đạt: push rotation/session/retry/opt-out, quyền bị ngắt, callback cũ, Activity detach |
 | Native bridge Android API 35 | 2 tests đạt trên emulator trước khi chuyển sang máy thật: snapshot/observer và lỗi bootstrap/envelope |
 | Native bridge iOS 18.3 | 2 tests đạt trên Simulator: snapshot/observer và lỗi bootstrap/envelope |
+| Keychain iOS host | 1 XCTest ghi–đọc mục thử riêng đạt trên Simulator với Signing Team/Bundle ID hợp lệ; không xóa phiên SDK |
 | Static analysis | SDK và demo không có vấn đề |
 | Android | Debug và release R8/resource shrinking build đạt; bản ARM64 release cài/mở trên Samsung A23 Android 14 |
 | iOS | Build Simulator debug và device release không ký đạt; Home/form login mở trên Simulator. Kiểm tra thủ công khôi phục cửa sổ khi dùng lại Bundle ID từ host không có storyboard đạt |
