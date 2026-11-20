@@ -1,0 +1,28 @@
+PODS:
+  - caresoft_customer_voice (0.1.0):
+    - Flutter
+  - Flutter (1.0.0)
+  - integration_test (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - caresoft_customer_voice (from `.symlinks/plugins/caresoft_customer_voice/ios`)
+  - Flutter (from `Flutter`)
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
+
+EXTERNAL SOURCES:
+  caresoft_customer_voice:
+    :path: ".symlinks/plugins/caresoft_customer_voice/ios"
+  Flutter:
+    :path: Flutter
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
+
+SPEC CHECKSUMS:
+  caresoft_customer_voice: 6515c461bab3f689fa38b9d580b2d378d5fd8aeb
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
+
+PODFILE CHECKSUM: aa138be8409ad2ab7f70f36aee65b237099b922e
+
+COCOAPODS: 1.16.2

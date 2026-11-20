@@ -32,3 +32,10 @@ __pycache__/
 vendor/
 lib/voice_config.json
 **/voice_config.json
+*.iml
+.gradle/
+
+# Flutter regenerates native registrants and local pod shim.
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+ios/Runner/GeneratedPluginRegistrant.*
+ios/Flutter/Flutter.podspec
