@@ -179,4 +179,4 @@ Native dọn local trước khi revoke server. LOGOUT_REVOKE_UNCONFIRMED vẫn l
 
 ## 10. Build và nghiệm thu
 
-Làm theo [chạy demo](demo.md) và [checklist thiết bị](testing.md). Unit/build/simulator không thay nghiệm thu audio, APNs/FCM, khóa màn hình và chuyển Wi-Fi/di động trên thiết bị thật. Không tự upload TestFlight/pub.dev khi build local.
+Làm theo [chạy demo](demo.md) và [checklist thiết bị](testing.md). Unit/build/simulator không thay nghiệm thu audio, APNs/FCM, khóa màn hình và chuyển Wi-Fi/di động trên thiết bị thật. Để phát hành iOS, dùng signing distribution và APNs production; để phát hành Android, thay debug signing bằng khóa phát hành của ứng dụng.

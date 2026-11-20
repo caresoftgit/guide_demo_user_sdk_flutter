@@ -2,6 +2,11 @@
 
 SDK/demo **0.1.0** cho khách hàng gọi CSKH và nhận cuộc gọi trên Android/iOS. Giao diện Home Flutter; màn hình nghe/gọi, Telecom/CallKit và media do SDK native cung cấp.
 
+```sh
+git clone https://github.com/caresoftgit/guide_demo_user_sdk_flutter.git
+cd guide_demo_user_sdk_flutter
+```
+
 1. Đọc [hướng dẫn tích hợp](docs/integration.md), tạo App Caresoft và cấu hình push cho đúng package/Bundle ID.
 2. Cài Flutter **3.50.1 / Dart 3.14.0**, JDK 17 và Android toolchain hoặc Xcode 26.4/CocoaPods.
 3. Chạy `python3 scripts/install_sdk.py` để kiểm tra checksum và cài gói SDK vào `vendor/`. Không cần clone source SDK native.
@@ -11,12 +16,13 @@ SDK/demo **0.1.0** cho khách hàng gọi CSKH và nhận cuộc gọi trên And
 
 Gói SDK dùng shared native Android core/UI 0.4.2 và iOS 0.1.2. Đầu số do ứng dụng tự cấu hình sau khi được cấp; không có getDestinations. Demo không có dialer hoặc trạng thái agent.
 
-Bộ bàn giao chỉ chứa cấu hình mẫu. Không có server/IP, đầu số, user/account test, token, Firebase project, Apple Team, thông tin ký hoặc đường dẫn máy build nội bộ. Account token chỉ nhập lúc login; private key push chỉ cấu hình trên server Caresoft. Không đưa các file local/generated vào Git.
+Bộ demo chỉ chứa cấu hình mẫu và package/Bundle ID `com.example.customervoicedemo`. Thay bằng thông tin ứng dụng của đơn vị tích hợp. Account token chỉ nhập lúc login; private key push chỉ cấu hình trên server Caresoft. Không đưa các file local/generated vào Git. Form đăng nhập là công cụ test; ứng dụng thực tế cấp phiên từ luồng xác thực của mình.
 
 - [Tích hợp từng bước](docs/integration.md)
 - [API Dart](docs/api.md)
 - [Chạy demo Android/iOS](docs/demo.md)
 - [Nghiệm thu thiết bị](docs/testing.md)
 - [Kiểm chứng và giới hạn](docs/validation.md)
+- [Source SDK Flutter](https://github.com/caresoftgit/user_voice_sdk_flutter)
 
-Chỉ hỗ trợ Android/iOS, không Flutter Web/desktop. Bản này dùng CocoaPods cho iOS; Flutter có thông báo về Swift Package Manager trong các phiên bản tương lai. Không tự publish pub.dev hoặc upload TestFlight.
+Chỉ hỗ trợ Android/iOS, không Flutter Web/desktop. Bản này dùng CocoaPods cho iOS; Flutter có thông báo về Swift Package Manager trong các phiên bản tương lai. Bản build phát hành cần cấu hình signing và push riêng của ứng dụng.
