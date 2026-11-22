@@ -1,12 +1,14 @@
 # Checklist nghiệm thu Flutter
 
+Luồng xác thực hiện tại: [phiên doanh nghiệp → ticket PKCE → SDK](host-bootstrap.md).
+
 Dùng cấu hình gateway/App/push/đầu số/signing riêng. Không có tài khoản hoặc routing dùng sẵn trong bộ demo.
 
 | Tình huống | Kết quả mong đợi |
 |---|---|
 | Chưa cấu hình | Home hướng dẫn cấu hình, khóa gọi/login, không crash |
 | Login/restore | Hiện đúng khách hàng/readiness; mở lại app khôi phục native session |
-| Logout/login khác | Dọn local/call khách cũ; form mới không giữ API token |
+| Logout/login khác | Dọn local/call khách cũ; form mới không giữ mật khẩu |
 | Gọi CSKH | Đúng đầu số host; bấm liên tục không tạo call lặp |
 | Request mất response | Khóa tạo mới đến khi synchronize thành công, không replay |
 | Cuộc gọi vào | Foreground/background/cold start có UI SDK; không chờ Dart |

@@ -10,7 +10,7 @@ import 'support.dart';
 class RejectedLoginTransport extends DemoTransport {
   @override
   Future<Object?> execute(String method, Map<String, Object?> args) async {
-    if (method == 'login') {
+    if (method == 'prepareLogin') {
       throw PlatformException(
         code: 'APP_NOT_FOUND',
         message: 'private response must stay hidden',
@@ -29,11 +29,15 @@ void main() {
         VoiceDemoApp(
           config: DemoConfig({
             'backendUrl': 'https://voice.example.com',
+            'enterpriseBackendUrl': 'https://host.example',
             'accountId': '42',
             'appId': 'example-app',
             'businessNumber': '18001234',
           }),
           voice: CustomerVoiceClient(t),
+          enterpriseTransport: (route, body, bearer) async => {
+            'enterprise_access_token': 'host-token',
+          },
         ),
       );
       await tester.pumpAndSettle();
@@ -75,11 +79,15 @@ void main() {
       VoiceDemoApp(
         config: DemoConfig({
           'backendUrl': 'https://voice.example.com',
+          'enterpriseBackendUrl': 'https://host.example',
           'accountId': '42',
           'appId': 'example-app',
           'businessNumber': '18001234',
         }),
         voice: CustomerVoiceClient(t),
+        enterpriseTransport: (route, body, bearer) async => {
+          'enterprise_access_token': 'host-token',
+        },
       ),
     );
     await tester.pumpAndSettle();
@@ -97,11 +105,15 @@ void main() {
       VoiceDemoApp(
         config: DemoConfig({
           'backendUrl': 'https://voice.example.com',
+          'enterpriseBackendUrl': 'https://host.example',
           'accountId': '42',
           'appId': 'example-app',
           'businessNumber': '18001234',
         }),
         voice: CustomerVoiceClient(t),
+        enterpriseTransport: (route, body, bearer) async => {
+          'enterprise_access_token': 'host-token',
+        },
       ),
     );
     await tester.pumpAndSettle();

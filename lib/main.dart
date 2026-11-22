@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:caresoft_customer_voice/caresoft_customer_voice.dart';
 
 import 'home_model.dart';
+import 'enterprise_session.dart';
 import 'call_attempt.dart';
 
 Future<void> main() async {
@@ -18,9 +19,15 @@ Future<void> main() async {
 }
 
 class VoiceDemoApp extends StatelessWidget {
-  const VoiceDemoApp({super.key, required this.config, this.voice});
+  const VoiceDemoApp({
+    super.key,
+    required this.config,
+    this.voice,
+    this.enterpriseTransport,
+  });
   final DemoConfig config;
   final CustomerVoiceClient? voice;
+  final EnterpriseTransport? enterpriseTransport;
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
@@ -30,14 +37,24 @@ class VoiceDemoApp extends StatelessWidget {
       scaffoldBackgroundColor: const Color(0xfff5f8fc),
       useMaterial3: true,
     ),
-    home: VoiceHome(config: config, voice: voice ?? CustomerVoice.instance),
+    home: VoiceHome(
+      config: config,
+      voice: voice ?? CustomerVoice.instance,
+      enterpriseTransport: enterpriseTransport,
+    ),
   );
 }
 
 class VoiceHome extends StatefulWidget {
-  const VoiceHome({super.key, required this.config, required this.voice});
+  const VoiceHome({
+    super.key,
+    required this.config,
+    required this.voice,
+    this.enterpriseTransport,
+  });
   final DemoConfig config;
   final CustomerVoiceClient voice;
+  final EnterpriseTransport? enterpriseTransport;
   @override
   State<VoiceHome> createState() => _VoiceHomeState();
 }
@@ -49,11 +66,21 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
   StreamSubscription<VoiceState>? _states;
   StreamSubscription<VoiceEvent>? _events;
   late final CallAttempt _attempt;
+  late final EnterpriseSession _enterprise;
   CustomerVoiceClient get voice => widget.voice;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _enterprise = EnterpriseSession(
+      widget.config.enterpriseBackendUrl,
+      prepare: voice.prepareLogin,
+      exchange: (a, t) async {
+        await voice.loginWithTicket(a, t);
+      },
+      nativeLogout: voice.logout,
+      transport: widget.enterpriseTransport,
+    );
     _attempt = CallAttempt(
       create: () async {
         await voice.call(widget.config.businessNumber);
@@ -152,7 +179,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
     );
     if (credentials != null && mounted) {
       await _action(() async {
-        await voice.login(credentials.$1, credentials.$2);
+        await _enterprise.login(credentials.$1, credentials.$2);
         await _attempt.synchronize();
       });
     }
@@ -178,7 +205,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
         ],
       ),
     );
-    if (confirmed == true && mounted) await _action(() => voice.logout());
+    if (confirmed == true && mounted) await _action(_enterprise.logout);
   }
 
   @override
@@ -421,13 +448,17 @@ class _LoginDialogState extends State<_LoginDialog> {
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Thông tin được ứng dụng cấp để sử dụng Voice SDK.'),
+        const Text(
+          'Đăng nhập doanh nghiệp để backend cấp ticket cho Voice SDK.',
+        ),
         const SizedBox(height: 16),
         TextField(
           key: const Key('login-user'),
           controller: user,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'User ID'),
+          keyboardType: TextInputType.text,
+          decoration: const InputDecoration(
+            labelText: 'Tên đăng nhập doanh nghiệp',
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -436,7 +467,7 @@ class _LoginDialogState extends State<_LoginDialog> {
           obscureText: true,
           autocorrect: false,
           enableSuggestions: false,
-          decoration: const InputDecoration(labelText: 'API token'),
+          decoration: const InputDecoration(labelText: 'Mật khẩu doanh nghiệp'),
         ),
       ],
     ),

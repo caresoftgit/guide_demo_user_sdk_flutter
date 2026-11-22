@@ -2,7 +2,7 @@
 """Install only the checksummed delivery into generated vendor/, never from live source."""
 from pathlib import Path
 import hashlib,json,shutil,tarfile,tempfile
-root=Path(__file__).resolve().parents[1];name='caresoft_customer_voice-0.1.0';archive=root/'packages'/(name+'.tar.gz')
+root=Path(__file__).resolve().parents[1];name='caresoft_customer_voice-0.5.0';archive=root/'packages'/(name+'.tar.gz')
 line=(root/'packages/SHA256SUMS').read_text().splitlines();assert len(line)==1,'Expected one current archive'
 digest,filename=line[0].split();assert filename=='packages/'+archive.name
 assert hashlib.sha256(archive.read_bytes()).hexdigest()==digest,'SDK archive checksum mismatch'

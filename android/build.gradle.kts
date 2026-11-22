@@ -2,7 +2,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri(rootProject.file("../vendor/caresoft_customer_voice-0.1.0/android/maven")) }
+        maven { url = uri(rootProject.file("../vendor/caresoft_customer_voice-0.5.0/android/maven")) }
         maven { url = uri("https://jitpack.io") }
     }
 }

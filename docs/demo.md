@@ -1,5 +1,7 @@
 # Chạy demo Flutter Android/iOS
 
+Luồng xác thực hiện tại: [phiên doanh nghiệp → ticket PKCE → SDK](host-bootstrap.md).
+
 ## 1. Cài gói và cấu hình
 
 Trong thư mục bộ demo:
@@ -68,7 +70,7 @@ Lệnh thứ hai kiểm tra build device unsigned; chưa tạo bản distributio
 ## 4. Test từ ứng dụng
 
 1. Home phải hiện đúng điều kiện cấu hình/đăng nhập/sẵn sàng.
-2. Bấm Đăng nhập, nhập User ID đã xác thực và API token account được cấp; không có tài khoản mặc định.
+2. Bấm Đăng nhập, nhập username/password doanh nghiệp được cấp; không có tài khoản mặc định.
 3. Bấm cấp quyền. canCall và canReceive là hai trạng thái riêng.
 4. Bấm Gọi CSKH; app gọi businessNumber đã cấu hình và mở màn hình SDK.
 5. Thử mic/loa/DTMF, về Home rồi Quay lại cuộc gọi; khi gác máy UI đóng về Home.

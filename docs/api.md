@@ -1,9 +1,9 @@
-# API Flutter Customer Voice 0.1.0
+# API Flutter Customer Voice 0.5.0
 
 `import 'package:caresoft_customer_voice/caresoft_customer_voice.dart';`
 Dùng `CustomerVoice.instance`. Native bootstrap trước Dart; `initialize(VoiceConfig)` chỉ xác nhận cấu hình trùng với native.
 
-- Phiên: `login(userId, accountApiToken)`, `logout()`, `checkReadiness()`, `resume()`, `getState()`, `synchronize()`.
+- Phiên: `prepareLogin()`, `loginWithTicket(attemptId, ticket)`, `logout()`, `checkReadiness()`, `resume()`, `getState()`, `synchronize()`.
 - Gọi: `call(businessNumber)`, `answer(callId)`, `reject(callId)`, `hangup(callId)`, `showCall(callId)`.
 - Audio: `setMuted(callId, bool)`, `getAvailableAudioRoutes(callId)`, `selectAudioRoute(callId, routeId)`, `sendDtmf(callId, digit)`.
 - Push: `updatePushToken(token)`, `unregisterPushToken()`. Thường để bootstrap native quản lý.

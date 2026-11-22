@@ -1,5 +1,7 @@
 # Tích hợp Customer Voice vào Flutter
 
+Luồng xác thực hiện tại: [phiên doanh nghiệp → ticket PKCE → SDK](host-bootstrap.md).
+
 ## 1. Chuẩn bị thông tin
 
 | Thông tin | Lấy ở đâu / sử dụng |
@@ -7,12 +9,12 @@
 | Gateway HTTPS URL | Caresoft cấp; dùng URL gốc, không thêm `/api/v1/voice` |
 | Account ID | Caresoft cấp; truyền chuỗi |
 | Caresoft App ID | Tạo ở bước 2; khác Firebase App ID và Apple Bundle ID |
-| User ID | Khách hàng đã được ứng dụng xác thực; chuỗi số 1–4294967295 |
-| Account API token | Caresoft cấp an toàn; chỉ truyền khi login, không đóng vào ứng dụng |
+| Phiên doanh nghiệp | Backend doanh nghiệp xác thực, tự lấy user_id Caresoft; không nhập từ app |
+| Credential tích hợp | Chỉ lưu backend doanh nghiệp để issue ticket; không cấp cho SDK/app |
 | Đầu số CSKH | Caresoft cấp sau khi định tuyến; ứng dụng tự cấu hình và truyền vào call |
 | Package/Bundle ID, Firebase hoặc Apple signing | Đơn vị tích hợp quản lý; khớp cấu hình push server |
 
-SDK không xác thực thay ứng dụng. Token account xác thực tích hợp account, không chứng minh danh tính User ID; chỉ cấp thông tin login sau luồng xác thực khách hàng của host, thống nhất cách cấp production với Caresoft. Không lưu token trong source, preferences, config, analytics hoặc log. Không truyền SIP URI/prefix hoặc IP tổng đài từ mobile.
+Backend doanh nghiệp xác thực khách hàng và issue ticket PKCE. App không nhận credential tích hợp; xem host-bootstrap.md. Không lưu token trong source, preferences, config, analytics hoặc log. Không truyền SIP URI/prefix hoặc IP tổng đài từ mobile.
 
 Phiên bản đã kiểm chứng: Flutter 3.50.1 / Dart 3.14.0; Android API 26+, compileSdk 37, JDK 17; iOS 15.1+, Xcode 26.4, CocoaPods. Demo ghim NDK 28.1.13356709. Chưa tuyên bố tương thích mọi Flutter version; Web/desktop không thuộc plugin này.
 
@@ -28,12 +30,12 @@ Phiên bản đã kiểm chứng: Flutter 3.50.1 / Dart 3.14.0; Android API 26+,
 
 ## 3. Thêm package Flutter
 
-Lấy archive `caresoft_customer_voice-0.1.0.tar.gz` trong bộ demo, kiểm tra SHA256SUMS, giải nén vào `vendor/` bằng `python3 scripts/install_sdk.py`. Trong dự án host, dùng cùng cấu trúc hoặc điều chỉnh path:
+Lấy archive `caresoft_customer_voice-0.5.0.tar.gz` trong bộ demo, kiểm tra SHA256SUMS, giải nén vào `vendor/` bằng `python3 scripts/install_sdk.py`. Trong dự án host, dùng cùng cấu trúc hoặc điều chỉnh path:
 
 ```yaml
 dependencies:
   caresoft_customer_voice:
-    path: vendor/caresoft_customer_voice-0.1.0
+    path: vendor/caresoft_customer_voice-0.5.0
 flutter:
   config:
     enable-swift-package-manager: false
@@ -48,7 +50,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri(rootProject.file("../vendor/caresoft_customer_voice-0.1.0/android/maven")) }
+        maven { url = uri(rootProject.file("../vendor/caresoft_customer_voice-0.5.0/android/maven")) }
         maven { url = uri("https://jitpack.io") }
     }
 }
@@ -140,14 +142,15 @@ Config phải trùng native; initialize chỉ kiểm tra, không thay bootstrap.
 ## 7. Login, quyền, readiness
 
 ```dart
-await voice.login(authenticatedCustomerId, accountApiToken);
+// Helper của ứng dụng demo, dùng prepareLogin → host bootstrap → loginWithTicket.
+await enterpriseSession.login(enterpriseUsername, enterprisePassword);
 await voice.requestMicrophonePermission(); // từ thao tác người dùng
 await voice.requestNotificationPermission();
 final ready = await voice.checkReadiness();
 // ready.isLoggedIn / ready.canCall / ready.canReceive / ready.reasons
 ```
 
-Native giữ session bằng Keychain/Keystore và tự restore; host không lưu account token để login lại khi offline. `UNKNOWN` là chưa xác minh được, không phải logout. canReceive còn phụ thuộc push/quyền; không chứng minh push thực tế đã tới.
+Native giữ session bằng Keychain/Keystore và tự restore; host không đưa credential tích hợp vào app để login lại khi offline. `UNKNOWN` là chưa xác minh được, không phải logout. canReceive còn phụ thuộc push/quyền; không chứng minh push thực tế đã tới.
 
 Android 14+ kiểm tra `canShowIncomingScreen()` và mở `requestIncomingScreenPermission()` từ thao tác người dùng. Không bypass PIN hoặc hứa nhận FCM sau Force stop. iOS dùng CallKit; quyền notification thường khác với PushKit/CallKit. Permission yêu cầu Activity/UIView host sẵn sàng.
 
