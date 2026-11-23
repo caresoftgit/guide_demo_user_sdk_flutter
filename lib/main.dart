@@ -6,7 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:caresoft_customer_voice/caresoft_customer_voice.dart';
 
 import 'home_model.dart';
-import 'enterprise_session.dart';
+import 'host_backend.dart';
 import 'call_attempt.dart';
 
 Future<void> main() async {
@@ -23,11 +23,11 @@ class VoiceDemoApp extends StatelessWidget {
     super.key,
     required this.config,
     this.voice,
-    this.enterpriseTransport,
+    this.requestTicket,
   });
   final DemoConfig config;
   final CustomerVoiceClient? voice;
-  final EnterpriseTransport? enterpriseTransport;
+  final RequestTicket? requestTicket;
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
@@ -40,7 +40,7 @@ class VoiceDemoApp extends StatelessWidget {
     home: VoiceHome(
       config: config,
       voice: voice ?? CustomerVoice.instance,
-      enterpriseTransport: enterpriseTransport,
+      requestTicket: requestTicket,
     ),
   );
 }
@@ -50,11 +50,11 @@ class VoiceHome extends StatefulWidget {
     super.key,
     required this.config,
     required this.voice,
-    this.enterpriseTransport,
+    this.requestTicket,
   });
   final DemoConfig config;
   final CustomerVoiceClient voice;
-  final EnterpriseTransport? enterpriseTransport;
+  final RequestTicket? requestTicket;
   @override
   State<VoiceHome> createState() => _VoiceHomeState();
 }
@@ -66,21 +66,12 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
   StreamSubscription<VoiceState>? _states;
   StreamSubscription<VoiceEvent>? _events;
   late final CallAttempt _attempt;
-  late final EnterpriseSession _enterprise;
+  int _connectionEpoch = 0;
   CustomerVoiceClient get voice => widget.voice;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _enterprise = EnterpriseSession(
-      widget.config.enterpriseBackendUrl,
-      prepare: voice.prepareLogin,
-      exchange: (a, t) async {
-        await voice.loginWithTicket(a, t);
-      },
-      nativeLogout: voice.logout,
-      transport: widget.enterpriseTransport,
-    );
     _attempt = CallAttempt(
       create: () async {
         await voice.call(widget.config.businessNumber);
@@ -94,7 +85,8 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
     );
     _states = voice.states.listen(_accept, onError: _showError);
     _events = voice.events.listen((e) {
-      if (e.type == 'error') {
+      // Native reports session replacement as LOGIN_PENDING during ticket login.
+      if (e.type == 'error' && e.code != 'LOGIN_PENDING') {
         _showError(CustomerVoiceException(e.code ?? 'VOICE_OPERATION_FAILED'));
       }
     }, onError: _showError);
@@ -114,7 +106,13 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
         : 'VOICE_OPERATION_FAILED';
     setState(
       () => _error = switch (code) {
-        'LOGIN_REQUIRED' => 'Bạn cần đăng nhập để sử dụng.',
+        'HOST_LOGIN_REQUIRED' =>
+          'Đăng nhập ứng dụng doanh nghiệp trước khi kết nối Voice.',
+        'HOST_CLIENT_REQUIRED' => 'Nối phiên ứng dụng trước khi kết nối Voice.',
+        'BOOTSTRAP_REQUEST_FAILED' =>
+          'Không thể xin ticket Voice. Kiểm tra phiên ứng dụng và kết nối.',
+        'INVALID_BOOTSTRAP_RESPONSE' => 'Phản hồi bootstrap không hợp lệ.',
+        'LOGIN_REQUIRED' => 'Kết nối Voice bằng phiên ứng dụng hiện có.',
         'UNAUTHORIZED' => 'Thông tin đăng nhập không hợp lệ.',
         'NETWORK_RECOVERY_TIMEOUT' =>
           'Cuộc gọi đã kết thúc vì không khôi phục được kết nối.',
@@ -122,7 +120,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
         'NATIVE_BOOTSTRAP_REQUIRED' || 'CONFIGURATION_MISMATCH' =>
           'Cấu hình native chưa sẵn sàng. Hãy kiểm tra cấu hình và build lại.',
         'LOGOUT_REVOKE_UNCONFIRMED' =>
-          'Đã đăng xuất trên máy. Server chưa xác nhận thu hồi phiên.',
+          'Đã ngắt Voice trên máy. Server chưa xác nhận thu hồi phiên.',
         _ => 'Không thực hiện được ($code). Kiểm tra kết nối và thử lại.',
       },
     );
@@ -172,26 +170,37 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
     await voice.resume();
     await voice.checkReadiness();
   });
-  Future<void> _login() async {
-    final credentials = await showDialog<(String, String)>(
-      context: context,
-      builder: (_) => const _LoginDialog(),
-    );
-    if (credentials != null && mounted) {
-      await _action(() async {
-        await _enterprise.login(credentials.$1, credentials.$2);
-        await _attempt.synchronize();
-      });
-    }
+  @override
+  void didUpdateWidget(covariant VoiceHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.requestTicket != widget.requestTicket) _connectionEpoch++;
   }
+
+  Future<void> _login() => _action(() async {
+    final request = widget.requestTicket;
+    if (request == null) throw CustomerVoiceException('HOST_CLIENT_REQUIRED');
+    final epoch = ++_connectionEpoch;
+    void current() {
+      if (!mounted || epoch != _connectionEpoch) {
+        throw CustomerVoiceException('LOGIN_ATTEMPT_SUPERSEDED');
+      }
+    }
+
+    final preparation = await voice.prepareLogin();
+    current();
+    final ticket = await request(preparation);
+    current();
+    await voice.loginWithTicket(preparation.attemptId, ticket);
+    await _attempt.synchronize();
+  });
 
   Future<void> _logout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Đăng xuất'),
+        title: const Text('Ngắt Voice'),
         content: const Text(
-          'Kết thúc phiên và các cuộc gọi trên thiết bị này?',
+          'Ngắt Voice trên thiết bị này? Cuộc gọi đang diễn ra sẽ kết thúc; tài khoản ứng dụng vẫn đăng nhập.',
         ),
         actions: [
           TextButton(
@@ -200,16 +209,20 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Đăng xuất'),
+            child: const Text('Ngắt Voice'),
           ),
         ],
       ),
     );
-    if (confirmed == true && mounted) await _action(_enterprise.logout);
+    if (confirmed == true && mounted) {
+      _connectionEpoch++;
+      await _action(voice.logout);
+    }
   }
 
   @override
   void dispose() {
+    _connectionEpoch++;
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_states?.cancel());
     unawaited(_events?.cancel());
@@ -386,12 +399,17 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                   if (_busy) const Center(child: CircularProgressIndicator()),
                   const SizedBox(height: 12),
                   TextButton(
-                    onPressed: _busy || !widget.config.configured
+                    onPressed:
+                        _busy ||
+                            !widget.config.configured ||
+                            (!model.loggedIn && widget.requestTicket == null)
                         ? null
                         : model.loggedIn
                         ? _logout
                         : _login,
-                    child: Text(model.loggedIn ? 'Đăng xuất' : 'Đăng nhập'),
+                    child: Text(
+                      model.loggedIn ? 'Ngắt Voice' : 'Kết nối Voice',
+                    ),
                   ),
                   if (widget.config.configured)
                     TextButton(
@@ -409,7 +427,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                     ),
                   const SizedBox(height: 18),
                   const Text(
-                    'Customer Voice · Flutter · 0.1.0',
+                    'Customer Voice · Flutter · 0.5.0',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 12, color: Colors.blueGrey),
                   ),
@@ -421,74 +439,4 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
       ),
     );
   }
-}
-
-class _LoginDialog extends StatefulWidget {
-  const _LoginDialog();
-  @override
-  State<_LoginDialog> createState() => _LoginDialogState();
-}
-
-class _LoginDialogState extends State<_LoginDialog> {
-  final user = TextEditingController();
-  final token = TextEditingController();
-  @override
-  void dispose() {
-    user.clear();
-    token.clear();
-    user.dispose();
-    token.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    scrollable: true,
-    title: const Text('Đăng nhập khách hàng'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'Đăng nhập doanh nghiệp để backend cấp ticket cho Voice SDK.',
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          key: const Key('login-user'),
-          controller: user,
-          keyboardType: TextInputType.text,
-          decoration: const InputDecoration(
-            labelText: 'Tên đăng nhập doanh nghiệp',
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          key: const Key('login-token'),
-          controller: token,
-          obscureText: true,
-          autocorrect: false,
-          enableSuggestions: false,
-          decoration: const InputDecoration(labelText: 'Mật khẩu doanh nghiệp'),
-        ),
-      ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: () {
-          token.clear();
-          Navigator.pop(context);
-        },
-        child: const Text('Hủy'),
-      ),
-      TextButton(
-        onPressed: () {
-          if (user.text.isNotEmpty && token.text.isNotEmpty) {
-            final value = (user.text, token.text);
-            token.clear();
-            Navigator.pop(context, value);
-          }
-        },
-        child: const Text('Đăng nhập'),
-      ),
-    ],
-  );
 }

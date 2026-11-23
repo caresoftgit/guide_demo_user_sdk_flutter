@@ -4,7 +4,7 @@ from pathlib import Path
 import hashlib,json,shutil,tarfile,tempfile
 root=Path(__file__).resolve().parents[1];name='caresoft_customer_voice-0.5.0';archive=root/'packages'/(name+'.tar.gz')
 line=(root/'packages/SHA256SUMS').read_text().splitlines();assert len(line)==1,'Expected one current archive'
-digest,filename=line[0].split();assert filename=='packages/'+archive.name
+digest,filename=line[0].split();assert filename in {archive.name,'packages/'+archive.name}
 assert hashlib.sha256(archive.read_bytes()).hexdigest()==digest,'SDK archive checksum mismatch'
 vendor=root/'vendor';vendor.mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(dir=vendor) as tmp:

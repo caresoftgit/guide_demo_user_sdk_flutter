@@ -1,32 +1,25 @@
 # Customer Voice — Flutter demo và tích hợp
 
-Xem [luồng đăng nhập doanh nghiệp và ticket PKCE](docs/host-bootstrap.md) trước khi tích hợp.
+SDK/demo **0.5.0** cho Android/iOS, dùng native core/UI và phiên Voice protocol 2. Ứng dụng đăng nhập doanh nghiệp theo hệ thống đang có; backend lấy `user_id` Caresoft từ principal đã xác thực và cấp ticket PKCE. Demo nhận callback xin ticket qua HTTP client đã xác thực, không thu username/password/API token và không kèm backend đăng nhập doanh nghiệp.
 
-SDK/demo **0.5.0** cho khách hàng gọi CSKH và nhận cuộc gọi trên Android/iOS. Giao diện Home Flutter; màn hình nghe/gọi, Telecom/CallKit và media do SDK native cung cấp.
+- [Chạy demo](docs/demo.md): cài gói, cấu hình công khai, Android/iOS và inject callback.
+- [Tích hợp từng bước](docs/integration.md): native bootstrap, push, readiness, UI nghe/gọi.
+- [Payload và quản lý phiên](docs/host-bootstrap.md): sơ đồ, request/response, bảo mật, TTL/refresh/logout và outbox.
+- [API Dart](docs/api.md), [kiểm thử thiết bị](docs/testing.md) và [tiêu chí nghiệm thu](docs/validation.md).
+- [Source SDK Flutter](https://github.com/caresoftgit/user_voice_sdk_flutter).
 
 ```sh
 git clone https://github.com/caresoftgit/guide_demo_user_sdk_flutter.git
 cd guide_demo_user_sdk_flutter
+shasum -a 256 -c packages/SHA256SUMS
+python3 scripts/install_sdk.py
+cp config/voice.example.json config/voice.local.json
 ```
 
-1. Đọc [hướng dẫn tích hợp](docs/integration.md), tạo App Caresoft và cấu hình push cho đúng package/Bundle ID.
-2. Cài Flutter **3.50.1 / Dart 3.14.0**, JDK 17 và Android toolchain hoặc Xcode 26.4/CocoaPods.
-3. Chạy `python3 scripts/install_sdk.py` để kiểm tra checksum và cài gói SDK vào `vendor/`. Không cần clone source SDK native.
-4. Chép `config/voice.example.json` thành `config/voice.local.json`, điền cấu hình ứng dụng. Không thêm API token account vào file.
-5. Chạy `python3 scripts/configure.py`, `flutter pub get`, rồi làm theo [chạy demo](docs/demo.md).
-6. Cấp quyền, nhập username/password doanh nghiệp trong form demo và thực hiện [checklist nghiệm thu](docs/testing.md).
+Điền cấu hình ứng dụng, chạy `python3 scripts/configure.py`, `flutter pub get`, rồi làm theo [hướng dẫn demo](docs/demo.md) để inject `requestTicket` và build native. Mặc định `main()` chưa inject callback nên nút **Kết nối Voice** bị khóa. Đây là điểm tích hợp HTTP client của khách hàng; điền URL bootstrap chưa đủ để kết nối.
 
-Gói SDK dùng shared native Android core/UI 0.5.0 và iOS 0.5.0. Đầu số do ứng dụng tự cấu hình sau khi được cấp; không có getDestinations. Demo không có dialer hoặc trạng thái agent.
+Toolchain: Flutter **3.50.1 / Dart 3.14.0**, Android API 26+, compileSdk 37, NDK 28.1.13356709, Gradle 9.5/AGP 9.3.1 và **OpenJDK 25** để chạy build tools; Java/Kotlin source target vẫn là 17. iOS cần 15.1+, Xcode 26.4 và CocoaPods. Gói SDK trong `packages/` đã có artifact Android/iOS, resource, privacy manifest, license và checksum; không cần clone source native.
 
-Bộ demo chỉ chứa cấu hình mẫu và package/Bundle ID `com.example.customervoicedemo`. Thay bằng thông tin ứng dụng của đơn vị tích hợp. Account token chỉ nhập lúc login; private key push chỉ cấu hình trên server Caresoft. Không đưa các file local/generated vào Git. Form đăng nhập là công cụ test; ứng dụng thực tế cấp phiên từ luồng xác thực của mình.
+Cấu hình mẫu dùng địa chỉ ví dụ và package/Bundle ID `com.example.customervoicedemo`. Cấu hình riêng đặt trong `config/voice.local.json` bị Git bỏ qua; chỉ chứa URL/ID/đầu số và Firebase client config công khai. Credential tích hợp, Customer REST token và private key push chỉ ở server. Không commit cấu hình triển khai hoặc dữ liệu tài khoản thật.
 
-- [Tích hợp từng bước](docs/integration.md)
-- [API Dart](docs/api.md)
-- [Chạy demo Android/iOS](docs/demo.md)
-- [Nghiệm thu thiết bị](docs/testing.md)
-- [Kiểm chứng và giới hạn](docs/validation.md)
-- [Source SDK Flutter](https://github.com/caresoftgit/user_voice_sdk_flutter)
-
-Chỉ hỗ trợ Android/iOS, không Flutter Web/desktop. Bản này dùng CocoaPods cho iOS; Flutter có thông báo về Swift Package Manager trong các phiên bản tương lai. Bản build phát hành cần cấu hình signing và push riêng của ứng dụng.
-
-Cấu hình thêm URL backend doanh nghiệp HTTPS (`enterpriseBackendUrl`; iOS: `VOICE_ENTERPRISE_BACKEND_URL`; Android: `demo_default_enterprise_backend`). Đăng nhập bằng tài khoản doanh nghiệp test, không nhập ID khách hàng hay API token. Xem `docs/host-bootstrap.md` và helper enterprise session trong source.
+Home dùng Flutter; cuộc gọi, Telecom/CallKit và media dùng UI native SDK. Chỉ hỗ trợ Android/iOS, không Flutter Web/desktop. Demo không có dialer, trạng thái agent hoặc API lấy danh sách đầu số; ứng dụng giữ đầu số đã được cấp. Bản phát hành cần signing và cấu hình push của chính ứng dụng.

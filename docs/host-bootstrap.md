@@ -1,49 +1,217 @@
-# Đăng nhập bằng phiên doanh nghiệp và ticket PKCE
+# Phiên doanh nghiệp và ticket PKCE trên Flutter
 
-Áp dụng SDK **0.5.0**, gateway hỗ trợ `auth_protocol=2`. Backend doanh nghiệp đã có API tra cứu/tạo khách hàng Caresoft; phần tích hợp này bắt đầu khi backend đã có `user_id` của người dùng đang đăng nhập.
+Áp dụng SDK **0.5.0** và gateway `auth_protocol=2`. Khách hàng đăng nhập ứng dụng doanh nghiệp theo cơ chế đang có. Backend doanh nghiệp đã tra cứu/tạo khách hàng qua Customer REST và ánh xạ principal đã xác thực sang `user_id` Caresoft. App không cho người dùng nhập ID này.
 
 ## Cấu hình và trách nhiệm
 
-Caresoft cung cấp HTTPS gateway, Account ID, App ID, đầu số và cấu hình cho package/bundle/origin, push theo từng môi trường. Credential tích hợp và Customer REST token chỉ cấp qua kênh bảo mật cho **backend doanh nghiệp**. App nhận URL gateway, URL backend doanh nghiệp, Account ID, App ID và đầu số; đây là cấu hình công khai. Không nhúng secret trong app, remote config, JS bundle hoặc source.
+| Nơi sử dụng | Thông tin cần có |
+|---|---|
+| App Flutter | HTTPS gateway, Account ID, Caresoft App ID, Bundle ID/package, môi trường push và đầu số được cấp |
+| HTTP client ứng dụng | Endpoint bootstrap của doanh nghiệp và phiên ứng dụng hiện có |
+| Backend doanh nghiệp | Credential tích hợp có scope issue/revoke/read, Account/App và ánh xạ khách hàng |
+| Tra cứu khách hàng | Customer REST credential riêng, chỉ ở backend nếu cần |
+| Firebase/Caresoft | Package Android, Firebase client config cho app; service-account private key chỉ ở server |
+| Apple/Caresoft | Bundle ID, Team/Key ID, APNs key phía server và môi trường khớp provisioning |
 
-Đăng nhập doanh nghiệp vẫn do ứng dụng sở hữu. Form demo chỉ nhập username/password của doanh nghiệp; không nhập `user_id` hoặc API token Caresoft. Production có thể dùng luồng SSO/phiên đang có thay form này.
+Account/App/Bundle ID/đầu số là cấu hình công khai, không phải secret. Credential tích hợp, Customer REST token, APNs private key và Firebase service-account private key chỉ ở server. Firebase client apiKey không phải private key server. App không nhận account API token. Caresoft App ID khác Apple Bundle ID. Không đưa token vào URL, log, analytics hoặc báo cáo crash.
 
-## Trình tự giao tiếp
+## Luồng hoàn chỉnh
 
-1. App đăng nhập backend doanh nghiệp qua HTTPS. Demo gọi `POST /api/auth/login` với `{username,password}`; nhận `{enterprise_access_token}` và giữ bearer trong memory. Endpoint này là hợp đồng ví dụ của host, không phải API gateway.
-2. App gọi SDK `prepareLogin()`. SDK tạo verifier ngẫu nhiên 32 byte bằng CSPRNG, giữ trong memory và chỉ trả bảy trường công khai bên dưới.
-3. App gửi `POST /api/voice/bootstrap` tới backend doanh nghiệp, `Authorization: Bearer <enterprise session>`, JSON:
+```mermaid
+sequenceDiagram
+    participant User as Khach hang
+    participant App as App doanh nghiep
+    participant Host as Backend doanh nghiep
+    participant SDK as Native Voice SDK
+    participant Gateway as Caresoft Gateway
+    User->>App: Dang nhap ung dung
+    App->>Host: Xac thuc theo co che san co
+    Host-->>App: Phien ung dung hop le
+    App->>SDK: prepareLogin()
+    SDK-->>App: Preparation cong khai
+    App->>Host: Bootstrap qua HTTP client da xac thuc
+    Host->>Host: Lay user_id tu principal server
+    Host->>Gateway: Issue ticket bang credential server
+    Gateway-->>Host: Ticket mot lan
+    Host-->>App: Ticket va attempt_id
+    App->>SDK: loginWithTicket()
+    SDK->>Gateway: Ticket va verifier PKCE
+    Gateway-->>SDK: Phien Voice protocol 2
+    SDK->>Gateway: Readiness va dong bo cuoc goi
+```
+
+### 1. Phiên đăng nhập ứng dụng
+
+Giữ nguyên đăng nhập/SSO, refresh và logout doanh nghiệp hiện có. SDK không xác thực username/password doanh nghiệp, không cấp phiên doanh nghiệp và không quy định API login riêng.
+
+Native thường dùng bearer của ứng dụng qua HTTP client đã xác thực. Đây là **bearer doanh nghiệp**, khác access token Voice và credential Caresoft. Nếu dùng cookie, dùng cookie/session client hiện có; backend phải bảo vệ CSRF theo cơ chế cookie của ứng dụng, nhất là endpoint dùng chung với Web. Native không có CORS bảo vệ như browser; server luôn phải xác thực phiên và kiểm tra quyền.
+
+### 2. App chuẩn bị và xin ticket
+
+Helper `lib/host_backend.dart` thuộc demo, không phải API SDK. Ứng dụng inject callback sau khi đã xác thực phiên doanh nghiệp:
+
+```dart
+import 'package:flutter/widgets.dart';
+import 'package:customer_voice_demo/main.dart';
+import 'package:customer_voice_demo/home_model.dart';
+import 'package:customer_voice_demo/host_backend.dart';
+
+// Adapter của HTTP client đang có; tự gắn bearer/cookie phiên ứng dụng.
+final HostTransport transport = authenticatedApplicationTransport;
+final config = DemoConfig(publicConfiguration);
+final backend = HostBackend(config.bootstrapUrl, transport: transport);
+runApp(VoiceDemoApp(config: config, requestTicket: backend.requestTicket));
+```
+
+`authenticatedApplicationTransport` và `publicConfiguration` là thành phần do doanh nghiệp cung cấp. `bootstrapUrl` là endpoint HTTPS đầy đủ, ví dụ `https://app.example.com/api/voice/bootstrap`. Helper không tự thêm path; URL không được chứa user-info, query hoặc fragment.
+
+```dart
+typedef RequestTicket = Future<String> Function(LoginPreparation preparation);
+typedef HostTransport = Future<HostResponse> Function(
+  Uri endpoint, Map<String, String> headers, String body,
+);
+// Kết quả transport:
+// HostResponse(statusCode: status, url: finalUrl, body: responseBody)
+```
+
+Transport thực hiện POST qua HTTP client đã xác thực của ứng dụng. Nó phải dùng HTTPS/TLS và kiểm tra chứng thư, giữ nguyên URL/body, cấm redirect ở tầng network (kể cả 307/308), cấm tự retry POST, áp deadline 5 giây và giới hạn đọc response **16 KiB trước khi buffer**. Future timeout ở Dart không tự hủy I/O; adapter phải đặt timeout/hủy request ở HTTP client. Kiểm tra URL cuối trong helper chỉ là kiểm tra bổ sung sau request, không thể ngăn credential/body đã bị chuyển qua redirect. Không log request/response.
+
+Helper thêm Content-Type JSON và Cache-Control no-store, ánh xạ đúng bảy trường preparation sang snake_case, kiểm tra response URL/status/attempt/ticket/expiry và giới hạn lại số byte UTF-8. Nó không tạo Authorization, không lưu/refresh phiên ứng dụng và không tự đăng nhập doanh nghiệp. Bearer ở transport là phiên ứng dụng; với cookie dùng client và CSRF policy hiện có. HTTP 401 thành `HOST_LOGIN_REQUIRED`; nội dung lỗi backend không được hiển thị nguyên văn.
+
+Mặc định `main()` chạy `VoiceDemoApp(config: config)` chưa inject callback, nên nút **Kết nối Voice** bị khóa. Có thể cung cấp callback riêng thay helper, với cùng hợp đồng bảo mật. Luồng trực tiếp khi không dùng màn hình mẫu:
+
+```dart
+final p = await voice.prepareLogin();
+final ticket = await requestTicket(p);
+await voice.loginWithTicket(p.attemptId, ticket);
+```
+
+Ví dụ endpoint **do doanh nghiệp triển khai**:
+
+```http
+POST https://app.example.com/api/voice/bootstrap
+Authorization: Bearer APPLICATION_SESSION_BEARER
+Content-Type: application/json
+Cache-Control: no-store
+```
 
 ```json
 {
-  "attempt_id": "UUID",
-  "installation_id": "UUID",
-  "os": "android|ios|web",
-  "application_id": "package, bundle ID hoặc origin đã đăng ký",
-  "push_environment": "default|sandbox|production",
-  "code_challenge": "base64url(SHA256(verifier))",
+  "attempt_id": "ATTEMPT_UUID",
+  "installation_id": "INSTALLATION_UUID",
+  "os": "ios",
+  "application_id": "com.example.CustomerApp",
+  "push_environment": "production",
+  "code_challenge": "BASE64URL_SHA256_VERIFIER",
   "code_challenge_method": "S256"
 }
 ```
 
-Backend xác thực phiên và lấy `user_id` từ principal server-side; không nhận override từ request. Account/App và application_id phải nằm trong allowlist cấu hình server. Nếu chưa có ID thì từ chối bootstrap; không cho client chọn khách hàng khác. Backend dùng credential tích hợp gọi API issue-ticket của gateway theo hợp đồng được Caresoft cấp, trả duy nhất:
+Các giá trị viết hoa là placeholder. `application_id` lấy từ preparation native: Bundle ID iOS hoặc package Android của app cuối cùng. Không tự sửa preparation. `LoginPreparation.platform` ánh xạ sang `os`; các trường `attemptId`, `installationId`, `applicationId`, `pushEnvironment`, `codeChallenge`, `codeChallengeMethod` ánh xạ sang tên snake_case tương ứng. Android dùng `os: "android"`, `push_environment: "default"`; iOS dùng `os: "ios"` và `sandbox`/`production` khớp signing/APNs. Account/App và package/Bundle ID phải được đăng ký trên gateway.
 
-```json
-{"attempt_id":"UUID","login_ticket":"opaque-one-use-ticket","expires_at":"ISO-8601"}
+Backend xác thực phiên, giới hạn tần suất, lấy `user_id` từ principal server. Account/App, Bundle ID, quyền truy cập khách hàng và host session phải được kiểm tra bằng dữ liệu server; không chấp nhận client override user/account/host session. Chưa ánh xạ khách hàng hoặc phiên hết hạn thì không cấp ticket.
+
+### 3. Backend doanh nghiệp gọi gateway
+
+```http
+POST https://voice.example.com/ACCOUNT_ID/api/v1/voice/session-tickets
+Authorization: Bearer SERVER_INTEGRATION_CREDENTIAL
+Content-Type: application/json
 ```
 
-4. App kiểm tra `attempt_id` khớp preparation, gọi `loginWithTicket(attemptId,ticket)`. SDK tự gửi ticket + attempt_id + installation_id + code_verifier tới `/sessions/exchange`; không chuyển verifier cho backend doanh nghiệp. Chỉ phiên còn đúng thế hệ đăng nhập mới được lưu. Không retry exchange mù hoặc fallback về `login(userId,apiToken)` khi lỗi; tạo preparation/ticket mới.
-5. SDK quản lý access/refresh token, kiểm tra readiness và gọi `call(businessNumber)`. Nhận cuộc gọi qua cơ chế SDK hiện tại. `prepareLogin` không ngắt phiên hoặc cuộc gọi đang có.
-6. Khi đăng xuất app, luôn gọi SDK `logout()` và backend doanh nghiệp `POST /api/auth/logout` với bearer doanh nghiệp, kể cả một bước lỗi. Backend phải vô hiệu hóa phiên host và thu hồi các phiên voice đã cấp; dùng outbox/retry bền vững nếu gateway offline. Helper demo có thể retry host logout trong memory; **không thay thế outbox production**. `LOGOUT_REVOKE_UNCONFIRMED` nghĩa local đã dọn nhưng server chưa xác nhận. App restart mất bearer demo thì phải đăng nhập doanh nghiệp lại để bootstrap mới khi cần.
+```json
+{
+  "app_id": "CARESOFT_APP_ID",
+  "user_id": "CARESOFT_USER_ID_FROM_SERVER",
+  "host_session_ref": "SERVER_HOST_SESSION_UUID",
+  "host_session_expires_at": "HOST_SESSION_EXPIRY_ISO8601",
+  "attempt_id": "ATTEMPT_UUID",
+  "installation_id": "INSTALLATION_UUID",
+  "os": "ios",
+  "application_id": "com.example.CustomerApp",
+  "push_environment": "production",
+  "code_challenge": "BASE64URL_SHA256_VERIFIER",
+  "code_challenge_method": "S256"
+}
+```
 
-## Hiệu lực và bảo vệ
+ID dạng số truyền bằng chuỗi. `host_session_ref` do server quản lý, gắn đúng phiên doanh nghiệp. Gateway kiểm tra credential theo Account/App/scope, quyền truy cập khách hàng, trạng thái App, cấu hình nền tảng và chính sách phiên. Không forward browser Origin vào endpoint server-to-server này.
 
-Ticket gateway một lần, mặc định 60 giây; pending preparation SDK tối đa 120 giây. Access mặc định 15 phút. Refresh rotation không kéo dài hạn tuyệt đối `sessionExpiresAt` do server quyết định; không hardcode TTL ở host. Refresh single-flight, lưu request UUID trước khi gửi để retry cùng UUID trong 30 giây khi mất response, kể cả restart. Quá cửa sổ phải bootstrap lại. Native giữ credential trong Keychain/Keystore; bridge chỉ trả metadata. Web mặc định memory, tùy chọn sessionStorage theo tab và Web Locks; JavaScript vẫn đọc được token, cần CSP/XSS controls và dependency tin cậy.
+Response gateway bọc trong `data`; backend lấy các trường cần thiết và trả app response phẳng với `Cache-Control: no-store`:
 
-Khi hết hạn tự nhiên, không tạo/nhận call mới. Call thuộc phiên đang ACTIVE có thể hoàn tất bằng capability giới hạn GET snapshot, POST hangup, POST media-token. Thu hồi rõ ràng/disable vẫn dọn media. Capability không thay bearer cho API khác.
+```json
+{
+  "attempt_id": "ATTEMPT_UUID",
+  "login_ticket": "OPAQUE_ONE_USE_TICKET",
+  "expires_at": "TICKET_EXPIRY_ISO8601"
+}
+```
 
-Mọi bước dùng TLS/HTTPS, media WSS/DTLS-SRTP theo SDK; PKCE là chứng minh sở hữu verifier, không phải mã hóa payload hoặc attestation thiết bị. Không tắt kiểm tra chứng thư. Không log password/ticket/verifier/bearer/media token. Không đưa credential vào URL, analytics hoặc crash reports. Response xác thực phải `Cache-Control: no-store`; proxy/CDN không cache. Backend host dùng cookie phải có CSRF và SameSite phù hợp; Web cross-origin cần allowlist CORS chính xác ở cả host và gateway, không wildcard credentialed origin.
+Không trả credential tích hợp, Customer REST token hay Voice access/refresh token từ endpoint bootstrap. Ticket gateway hiện là chuỗi base64url 43 ký tự; `expires_at` là ISO8601 có timezone, phải còn hiệu lực theo thời gian server trả. Backend/gateway quyết định hiệu lực; app dùng ticket ngay, không hardcode một expiry mới. Helper kiểm tra attempt, định dạng ticket/expiry và kích thước response, không hiển thị nội dung lỗi nhạy cảm. HTTP 401 yêu cầu ứng dụng đăng nhập lại bằng luồng hiện có.
 
-## Thử môi trường thật
+### 4. Exchange và sẵn sàng gọi
 
-Lấy tài khoản doanh nghiệp test từ người vận hành fixture qua kênh riêng. Không dùng credential Caresoft để điền vào form. Kiểm thử gọi ra/đến, push, nền, khóa màn hình và đổi tài khoản trên thiết bị thật từng platform; build/unit test không chứng minh các hành vi này. Fixture UI Web chỉ giả lập, có nhãn riêng và không gọi gateway/PBX.
+SDK giữ verifier trong memory, không gửi cho backend doanh nghiệp. `loginWithTicket` tự gửi ticket, attempt, installation và verifier tới `POST /ACCOUNT_ID/api/v1/voice/sessions/exchange`. Chỉ attempt thuộc thế hệ hiện hành mới commit. Preparation mới không ngắt phiên/cuộc gọi đang có; exchange thành công mới thay thế phiên.
+
+Exchange có kết quả không rõ thì tạo preparation/ticket mới; không retry ticket đã dùng hoặc fallback legacy login. SDK tự giữ access/refresh và đồng bộ push/readiness. Theo dõi `sessionState` và `readiness`; có token local chưa đồng nghĩa `canCall`/`canReceive`. Xin microphone từ tương tác phù hợp và gọi `resume()`/`checkReadiness()`.
+
+## Hiệu lực, refresh và lưu trữ native
+
+| Dữ liệu | Quy tắc |
+|---|---|
+| Preparation | Tối đa 120 giây; verifier chỉ ở memory |
+| Ticket | Một lần, mặc định 60 giây, không vượt hạn phiên; dùng expiry server trả |
+| Access Voice | Thông thường 15 phút, SDK tự refresh |
+| Refresh/phiên | Hạn tuyệt đối theo chính sách server và phiên doanh nghiệp; rotation không kéo dài hạn này |
+| Refresh mất response | Single-flight, UUID được lưu trước HTTP; retry cùng UUID/payload trong 30 giây kể cả restart |
+| Phiên doanh nghiệp | Ứng dụng quản lý; SDK không lưu hoặc refresh phiên này |
+
+iOS lưu access/refresh và pending UUID trong một record Keychain atomic, `AfterFirstUnlockThisDeviceOnly`; namespace/locator ngăn restore phiên đã logout hoặc record giữ lại sau reinstall. Android dùng storage được bảo vệ bằng Keystore. Dart chỉ nhận metadata `SessionInfo`; không lưu Voice credentials vào preferences, UserDefaults, file cấu hình hoặc log. Verifier/ticket không persist. Secure storage không phải chứng thực thiết bị.
+
+Quá cửa sổ refresh cần bootstrap mới. Mất mạng có thể giữ readiness UNKNOWN; không coi mọi lỗi mạng là logout. Hết hạn tự nhiên chặn cuộc gọi mới; cuộc gọi ACTIVE có thể hoàn tất bằng capability giới hạn snapshot/hangup/media-token tới deadline server. Thu hồi rõ ràng/logout dừng media. Capability không thay bearer chung; restart cần phiên hợp lệ để đồng bộ.
+
+## Ngắt Voice và đăng xuất ứng dụng
+
+**Ngắt Voice:** `await CustomerVoice.instance.logout()` dừng media, dọn phiên/preparation local trước rồi cố revoke phiên Voice hiện tại. Tài khoản ứng dụng vẫn đăng nhập và có thể xin ticket mới. Đây là hành vi nút **Ngắt Voice** trong demo.
+
+**Đăng xuất ứng dụng:** thực hiện cả SDK logout và logout doanh nghiệp hiện có, kể cả một bên lỗi. Tuần tự hóa chuyển tài khoản/đăng xuất với kết nối Voice để request và cleanup luôn gắn đúng phiên cũ. Ví dụ trong luồng ứng dụng:
+
+```dart
+// Chạy bên trong coordinator đã tuần tự hóa kết nối/ngắt/chuyển tài khoản.
+Object? voiceError;
+Object? appError;
+try {
+  await voice.logout();
+} catch (error) {
+  voiceError = error;
+}
+try {
+  await existingAppSession.logout();
+} catch (error) {
+  appError = error;
+}
+// Xử lý cả hai kết quả; không bỏ qua lỗi host hoặc trạng thái revoke đang chờ.
+```
+
+`existingAppSession` là thành phần đã có của doanh nghiệp. Backend vô hiệu hóa phiên host và ghi outbox HOST-revoke trong cùng transaction bền vững, từ đó chặn bootstrap mới. Worker dùng credential server:
+
+```http
+POST https://voice.example.com/ACCOUNT_ID/api/v1/voice/service/session-revocations
+Authorization: Bearer SERVER_INTEGRATION_CREDENTIAL
+X-Request-Id: STABLE_REVOCATION_UUID
+Content-Type: application/json
+```
+
+```json
+{"scope":"HOST","host_session_ref":"SERVER_HOST_SESSION_UUID"}
+```
+
+Retry cùng UUID và payload. Response trong `data` có `revocation_id`, `authority_revoked_at`, `cleanup_status`. `pending` chưa phải hoàn tất cleanup; theo dõi `GET /ACCOUNT_ID/api/v1/voice/service/session-revocations/REVOCATION_ID` bằng credential server và tiếp tục xử lý tới khi xác nhận. Không đặt outbox trong memory app.
+
+Logout offline hoặc `LOGOUT_REVOKE_UNCONFIRMED` nghĩa local đã dọn nhưng chưa bảo đảm server thu hồi ngay. Không khôi phục token local đã xóa. Ngắt Voice không vô hiệu hóa phiên doanh nghiệp.
+
+## Mã hóa và giới hạn nền tảng
+
+API dùng HTTPS/TLS; media dùng WSS và WebRTC DTLS-SRTP. Không tắt kiểm tra chứng thư hoặc ATS. PKCE chứng minh sở hữu verifier, không mã hóa JSON, không thay xác thực phiên và không chứng thực thiết bị.
+
+Khởi tạo native sớm từ Application/AppDelegate, không chờ Dart hoặc HTTP trong push callback. iOS dùng CallKit/PushKit; Android forward FCM từ service hiện có, kèm Telecom/foreground service và quyền notification/full-screen phù hợp. Simulator/emulator kiểm tra UI/bridge/gọi ra; nhận cuộc gọi nền, cold start, khóa máy, Bluetooth, chuyển mạng và audio hai chiều phải nghiệm thu trên thiết bị thật. Không bảo đảm push sau Android Force stop.

@@ -9,6 +9,7 @@ Luồng xác thực hiện tại: [phiên doanh nghiệp → ticket PKCE → SDK
 | Gateway HTTPS URL | Caresoft cấp; dùng URL gốc, không thêm `/api/v1/voice` |
 | Account ID | Caresoft cấp; truyền chuỗi |
 | Caresoft App ID | Tạo ở bước 2; khác Firebase App ID và Apple Bundle ID |
+| Bootstrap HTTPS endpoint | Endpoint đầy đủ của doanh nghiệp; gọi qua HTTP client ứng dụng đã xác thực |
 | Phiên doanh nghiệp | Backend doanh nghiệp xác thực, tự lấy user_id Caresoft; không nhập từ app |
 | Credential tích hợp | Chỉ lưu backend doanh nghiệp để issue ticket; không cấp cho SDK/app |
 | Đầu số CSKH | Caresoft cấp sau khi định tuyến; ứng dụng tự cấu hình và truyền vào call |
@@ -16,7 +17,7 @@ Luồng xác thực hiện tại: [phiên doanh nghiệp → ticket PKCE → SDK
 
 Backend doanh nghiệp xác thực khách hàng và issue ticket PKCE. App không nhận credential tích hợp; xem host-bootstrap.md. Không lưu token trong source, preferences, config, analytics hoặc log. Không truyền SIP URI/prefix hoặc IP tổng đài từ mobile.
 
-Phiên bản đã kiểm chứng: Flutter 3.50.1 / Dart 3.14.0; Android API 26+, compileSdk 37, JDK 17; iOS 15.1+, Xcode 26.4, CocoaPods. Demo ghim NDK 28.1.13356709. Chưa tuyên bố tương thích mọi Flutter version; Web/desktop không thuộc plugin này.
+Phiên bản đã kiểm chứng: Flutter 3.50.1 / Dart 3.14.0; Android API 26+, compileSdk 37, OpenJDK 25 cho build tools (source target Java/Kotlin 17); iOS 15.1+, Xcode 26.4, CocoaPods. Demo ghim NDK 28.1.13356709, Gradle 9.5 và AGP 9.3.1. Chưa tuyên bố tương thích mọi Flutter version; Web/desktop không thuộc plugin này.
 
 ## 2. Tạo App Caresoft và cấu hình push
 
@@ -56,7 +57,7 @@ allprojects {
 }
 ```
 
-Đặt minSdk 26+, compileSdk 37; giữ Java/Kotlin toolchain phù hợp host. Demo dùng AGP/Gradle theo template Flutter đã ghim. Không thêm bản native SDK khác với manifest. iOS chạy `cd ios && pod install`, mở `Runner.xcworkspace`; không chỉ mở xcodeproj.
+Đặt minSdk 26+, compileSdk 37; giữ Java/Kotlin toolchain phù hợp host. Demo dùng Gradle 9.5/AGP 9.3.1 và cần OpenJDK 25 để chạy build tools; source target Java/Kotlin vẫn là 17. Không thêm bản native SDK khác với manifest. iOS chạy `cd ios && pod install`, mở `Runner.xcworkspace`; không chỉ mở xcodeproj.
 
 ## 4. Bootstrap Android trước Dart
 
@@ -142,13 +143,17 @@ Config phải trùng native; initialize chỉ kiểm tra, không thay bootstrap.
 ## 7. Login, quyền, readiness
 
 ```dart
-// Helper của ứng dụng demo, dùng prepareLogin → host bootstrap → loginWithTicket.
-await enterpriseSession.login(enterpriseUsername, enterprisePassword);
+// requestTicket dùng HTTP client hiện có của ứng dụng đã đăng nhập.
+final preparation = await voice.prepareLogin();
+final ticket = await requestTicket(preparation);
+await voice.loginWithTicket(preparation.attemptId, ticket);
 await voice.requestMicrophonePermission(); // từ thao tác người dùng
 await voice.requestNotificationPermission();
 final ready = await voice.checkReadiness();
 // ready.isLoggedIn / ready.canCall / ready.canReceive / ready.reasons
 ```
+
+`requestTicket` có kiểu `Future<String> Function(LoginPreparation)`; xem [helper và transport](host-bootstrap.md). Demo nhận callback qua `VoiceDemoApp(config: config, requestTicket: requestTicket)`; không callback thì Kết nối Voice bị khóa. Helper không quản lý bearer/cookie hoặc xác thực doanh nghiệp.
 
 Native giữ session bằng Keychain/Keystore và tự restore; host không đưa credential tích hợp vào app để login lại khi offline. `UNKNOWN` là chưa xác minh được, không phải logout. canReceive còn phụ thuộc push/quyền; không chứng minh push thực tế đã tới.
 
@@ -172,13 +177,13 @@ ConnectionStates phản ánh CONNECTING/CONNECTED/RECONNECTING. Khi đổi mạn
 
 ## 9. Foreground và logout
 
-Khi app trở lại resumed, gọi `voice.resume()`; không tự login hoặc tạo call. Khi logout:
+Khi app trở lại resumed, gọi `voice.resume()`; không tự login hoặc tạo call. Nút **Ngắt Voice** chỉ dọn phiên SDK; ứng dụng vẫn giữ phiên doanh nghiệp:
 
 ```dart
 await voice.logout();
 ```
 
-Native dọn local trước khi revoke server. LOGOUT_REVOKE_UNCONFIRMED vẫn là local đã logout; không phục hồi phiên cũ. Theo dõi loggedOut/loginRequired để quay về luồng xác thực host. Form đăng nhập chỉ là tiện ích demo; production tích hợp trong login của ứng dụng.
+Native dọn local trước khi revoke server. LOGOUT_REVOKE_UNCONFIRMED vẫn là local đã logout; không phục hồi phiên cũ. Theo dõi loggedOut/loginRequired để xin ticket mới qua phiên ứng dụng hợp lệ. **Đăng xuất ứng dụng** phải luôn gọi cả SDK logout và logout doanh nghiệp hiện có, kể cả khi một bên lỗi. Tuần tự hóa kết nối/ngắt/chuyển tài khoản; backend vô hiệu hóa phiên host và ghi outbox HOST-revoke bền vững trong cùng transaction. Xem [luồng logout và retry/poll](host-bootstrap.md). Không đặt outbox trong memory app.
 
 ## 10. Build và nghiệm thu
 

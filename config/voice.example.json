@@ -11,5 +11,5 @@
     "projectId": "",
     "senderId": ""
   },
-  "enterpriseBackendUrl": "https://enterprise.example.com"
+  "bootstrapUrl": "https://app.example.com/api/voice/bootstrap"
 }

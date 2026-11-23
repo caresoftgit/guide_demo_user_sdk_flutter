@@ -4,8 +4,7 @@ class DemoConfig {
   DemoConfig(this.values);
   final Map<String, dynamic> values;
   String get businessNumber => values['businessNumber'] as String? ?? '';
-  String get enterpriseBackendUrl =>
-      values['enterpriseBackendUrl'] as String? ?? '';
+  String get bootstrapUrl => values['bootstrapUrl'] as String? ?? '';
   VoiceConfig get sdk => VoiceConfig(
     backendUrl: values['backendUrl'] as String? ?? '',
     accountId: values['accountId'] as String? ?? '',
@@ -15,7 +14,7 @@ class DemoConfig {
   );
   bool get configured =>
       sdk.backendUrl.startsWith('https://') &&
-      enterpriseBackendUrl.startsWith('https://') &&
+      bootstrapUrl.startsWith('https://') &&
       sdk.accountId.isNotEmpty &&
       sdk.appId.isNotEmpty &&
       RegExp(r'^\+?[0-9]{1,32}$').hasMatch(businessNumber);
@@ -47,7 +46,7 @@ class HomeModel {
       : activeCallId != null
       ? 'Đang trong cuộc gọi'
       : !loggedIn
-      ? 'Chưa đăng nhập'
+      ? 'Chưa kết nối Voice'
       : state?.readiness.canCall == true
       ? 'Sẵn sàng gọi CSKH'
       : 'Đang kiểm tra kết nối';

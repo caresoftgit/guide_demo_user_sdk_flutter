@@ -59,6 +59,30 @@ class DemoTransport implements VoiceTransport {
   Future<Object?> execute(String method, Map<String, Object?> args) async {
     operations.add(method);
     if (method == 'getState' || method == 'synchronize') return state;
+    if (method == 'prepareLogin') {
+      return {
+        'attemptId': '550e8400-e29b-41d4-a716-446655440000',
+        'installationId': '550e8400-e29b-41d4-a716-446655440001',
+        'platform': 'android',
+        'applicationId': 'com.example.customerapp',
+        'pushEnvironment': 'default',
+        'codeChallenge': 'a' * 43,
+        'codeChallengeMethod': 'S256',
+      };
+    }
+    if (method == 'loginWithTicket') {
+      state = {...stateMap(loggedIn: true, ready: true), 'revision': 2};
+      changes.add(state);
+      return {
+        'userId': '42',
+        'sessionId': 'session-example',
+        'expiresAt': '2030-01-01T00:00:00Z',
+      };
+    }
+    if (method == 'logout') {
+      state = {...stateMap(), 'revision': 3};
+      changes.add(state);
+    }
     if (method == 'canShowIncomingScreen') return true;
     return null;
   }
